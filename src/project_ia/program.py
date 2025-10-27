@@ -174,7 +174,7 @@ class CarsLoader:
             cars: list[Car] = []
             for row in reader:
                 print(row)
-                car: Car = Car(**row)
+                car: Car = Car(**row) # type: ignore
                 cars.append(car)
             return cars
 
