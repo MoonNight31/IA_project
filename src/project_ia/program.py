@@ -173,9 +173,31 @@ class CarsLoader:
             reader: DictReader = DictReader(file)
             cars: list[Car] = []
             for row in reader:
-                print(row)
-                car: Car = Car(**row) # type: ignore
-                cars.append(car)
+                # Conversion des types car CSV lit tout en string
+                try:
+                    converted_row = {
+                        'manufacturer': row['manufacturer'],
+                        'model': row['model'],
+                        'year': int(row['year']),
+                        'power': int(row['power']),
+                        'torque': int(row['torque']),
+                        'max_speed': int(row['max_speed']),
+                        'fuel_efficiency': float(row['fuel_efficiency']),
+                        'fuel_type': row['fuel_type'],
+                        'doors_number': int(row['doors_number']),
+                        'weight': int(row['weight']),
+                        'aerodynamic_level': float(row['aerodynamic_level']),
+                        'turbo_count': int(row['turbo_count']),
+                        'millage_in_km': int(row['millage_in_km']),
+                        'zero_to_hundred': float(row['zero_to_hundred']),
+                        'transmission_type': row['transmission_type'],
+                        'is_started': row['is_started'].lower() == 'true'
+                    }
+                    car: Car = Car(**converted_row)
+                    cars.append(car)
+                except (ValueError, KeyError) as e:
+                    print(f"Erreur lors du chargement d'une ligne: {e}")
+                    continue
             return cars
 
 
@@ -191,10 +213,14 @@ def main():
     # Sauvegarder en une seule fois
     CarsLoader.save_batch(garage, csv_file)
 
+    # Cette ligne était commentée avant - c'est pourquoi vous n'aviez pas l'erreur
     #garage_as_dict = [car.__dict__ for car in garage   ]
     #data_frame = pandas.DataFrame(garage_as_dict)
     #print(data_frame)
-
+    
+    # Si vous décommentez ces lignes, vous verrez l'erreur :
+    # loaded_cars = CarsLoader.load(csv_file)
+    # print(f"Voitures chargées: {len(loaded_cars)}")
 
 if (__name__ == "__main__"):
     main()
