@@ -38,7 +38,7 @@ poetry install
 python src/project_ia/program.py
 ```
 
-Cela crée un fichier `cars.csv` avec les données. Le projet inclut déjà un dataset de 198,000 voitures prêt à l'emploi.
+Cela crée un fichier `cars.csv` avec les données.
 
 ### Étape 2 : Entraîner les Réseaux de Neurones
 
@@ -250,7 +250,4 @@ python src/project_ia/program.py
 
 MoonNight31
 
-## 🤝 Contribution
-
-Les contributions sont bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
 
