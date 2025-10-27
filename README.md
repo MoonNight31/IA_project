@@ -248,8 +248,9 @@ python src/project_ia/program.py
 
 ## 📝 Licence
 
-Projet éducatif - Charles Xarrie (charles.xarrie@limayrac.fr)
+MoonNight31
 
 ## 🤝 Contribution
 
 Les contributions sont bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
+
