@@ -174,7 +174,7 @@ class CarsLoader:
             cars: list[Car] = []
             for row in reader:
                 print(row)
-                car: Car = Car(**row)
+                car: Car = Car(**row) # pyright: ignore[reportArgumentType]
                 cars.append(car)
             return cars
 
