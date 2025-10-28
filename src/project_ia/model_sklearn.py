@@ -244,16 +244,6 @@ class SkLearnCarNN:
         
         return train_time
     
-    def train_and_evaluate(self, X_train, y_train, X_test, y_test):
-        """Entraîne et évalue le modèle en une seule fonction."""
-        # Entraînement
-        train_time = self.train_regression(X_train, y_train)
-        
-        # Évaluation
-        mae, rmse, r2, predictions = self.evaluate_regression(X_test, y_test)
-        
-        return train_time, mae, rmse, r2, predictions
-    
     def evaluate_regression(self, X_test, y_test):
         """Évalue le modèle de régression."""
         print("\n" + "=" * 80)

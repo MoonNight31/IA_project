@@ -11,8 +11,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, classification_report
 import matplotlib.pyplot as plt
 import time
-import warnings
-warnings.filterwarnings('ignore')
+
 
 class TensorFlowCarNN:
     """
@@ -25,19 +24,10 @@ class TensorFlowCarNN:
         try:
             import tensorflow as tf
             from tensorflow import keras
-            # Configurer TensorFlow pour éviter les erreurs GPU/mémoire
-            tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('GPU')[0], True) if tf.config.list_physical_devices('GPU') else None
             self.tf = tf
             self.keras = keras
-            print(f"TensorFlow version: {tf.__version__}")
         except ImportError:
-            raise ImportError("TensorFlow n'est pas installé. Exécutez: python -m pip install tensorflow")
-        except Exception as e:
-            print(f"Avertissement TensorFlow: {e}")
-            import tensorflow as tf
-            from tensorflow import keras
-            self.tf = tf
-            self.keras = keras
+            raise ImportError("TensorFlow n'est pas installé. Exécutez: pip install tensorflow")
         
         self.model = None
         self.history = None
@@ -109,95 +99,43 @@ class TensorFlowCarNN:
         print("Chargement du dataset...")
         start_time = time.time()
         
-        try:
-            # Spécifier l'encodage pour éviter les erreurs
-            df = pd.read_csv(csv_path, encoding='utf-8')
-        except UnicodeDecodeError:
-            try:
-                df = pd.read_csv(csv_path, encoding='latin-1')
-            except:
-                df = pd.read_csv(csv_path, encoding='cp1252')
-        
-        # Nettoyer les données
+        df = pd.read_csv(csv_path)
         df = df.dropna()
         if 'is_started' in df.columns:
             df = df.drop('is_started', axis=1)
         
-        # Vérifier les colonnes nécessaires
-        required_cols = ['power', 'weight', 'zero_to_hundred']
-        missing_cols = [col for col in required_cols if col not in df.columns]
-        if missing_cols:
-            raise ValueError(f"Colonnes manquantes: {missing_cols}")
-        
         load_time = time.time() - start_time
         
-        print(f"  Dataset chargé en {load_time:.2f}s")
+        print(f"  Dataset charge en {load_time:.2f}s")
         print(f"  Taille: {len(df):,} voitures")
-        print(f"  Colonnes: {list(df.columns)}")
-        print(f"  Mémoire: ~{df.memory_usage(deep=True).sum() / 1024**2:.1f} MB")
+        print(f"  Memoire: ~{df.memory_usage(deep=True).sum() / 1024**2:.1f} MB")
         
         return df
     
     def prepare_regression_data(self, df: pd.DataFrame, target_col: str = "zero_to_hundred"):
         """Prépare les données pour la régression."""
-        print("\nPréparation des données pour la régression...")
+        print("\nPreparation des donnees pour la regression...")
         
-        # Vérifier que la colonne cible existe
-        if target_col not in df.columns:
-            raise ValueError(f"Colonne cible '{target_col}' introuvable dans le dataset")
-        
-        # Features numériques - vérifier leur existence
-        available_numeric = ['power', 'torque', 'weight', 'aerodynamic_level', 
+        # Features numériques
+        numeric_features = ['power', 'torque', 'weight', 'aerodynamic_level', 
                            'turbo_count', 'year', 'doors_number']
-        numeric_features = [col for col in available_numeric if col in df.columns]
         
-        # Features catégorielles - vérifier leur existence
-        available_categorical = ['fuel_type', 'transmission_type', 'manufacturer']
-        categorical_features = [col for col in available_categorical if col in df.columns]
-        
-        print(f"  Features numériques: {numeric_features}")
-        print(f"  Features catégorielles: {categorical_features}")
+        # Features catégorielles
+        categorical_features = ['fuel_type', 'transmission_type', 'manufacturer']
         
         df_processed = df.copy()
         
-        # One-hot encoding avec gestion d'erreurs
+        # One-hot encoding
         encoded_features = []
         for cat_feat in categorical_features:
-            try:
-                # Nettoyer les valeurs nulles et les espaces
-                df_processed[cat_feat] = df_processed[cat_feat].astype(str).str.strip()
-                dummies = pd.get_dummies(df_processed[cat_feat], prefix=cat_feat, drop_first=True)
+            if cat_feat in df.columns:
+                dummies = pd.get_dummies(df[cat_feat], prefix=cat_feat, drop_first=True)
                 encoded_features.extend(dummies.columns.tolist())
                 df_processed = pd.concat([df_processed, dummies], axis=1)
-            except Exception as e:
-                print(f"  Erreur avec {cat_feat}: {e}")
-                continue
         
         feature_cols = numeric_features + encoded_features
-        
-        # Vérifier qu'il y a assez de features
-        if len(feature_cols) < 3:
-            raise ValueError(f"Pas assez de features valides: {feature_cols}")
-        
-        # Extraire X et y avec gestion d'erreurs
-        try:
-            X = df_processed[feature_cols].values.astype(np.float32)
-            y = df[target_col].values.astype(np.float32)
-        except Exception as e:
-            print(f"Erreur lors de l'extraction des données: {e}")
-            # Essayer de nettoyer les données
-            for col in feature_cols:
-                df_processed[col] = pd.to_numeric(df_processed[col], errors='coerce')
-            df_processed = df_processed.dropna()
-            X = df_processed[feature_cols].values.astype(np.float32)
-            y = df_processed[target_col].values.astype(np.float32)
-        
-        # Vérifier les valeurs infinies ou NaN
-        if np.any(np.isnan(X)) or np.any(np.isinf(X)):
-            print("  Nettoyage des valeurs NaN/Inf...")
-            finite_mask = np.isfinite(X).all(axis=1) & np.isfinite(y)
-            X = X[finite_mask]
-            y = y[finite_mask]
+        X = df_processed[feature_cols].values
+        y = df[target_col].values
         
         self.feature_names = feature_cols
         n_features = len(feature_cols)
@@ -207,40 +145,23 @@ class TensorFlowCarNN:
         
         print(f"\nConfiguration TensorFlow:")
         print(f"  Features: {n_features}")
-        print(f"  Échantillons: {len(X):,}")
         print(f"  Batch size: {config['batch_size']}")
         print(f"  Max epochs: {config['max_epochs']}")
         print(f"  Patience: {config['patience']}")
         print(f"  Hidden layers: {config['hidden_layers']}")
         print(f"  Test size: {config['test_size']*100:.0f}%")
         
-        # Split avec vérification
-        try:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=config['test_size'], random_state=42
-            )
-        except Exception as e:
-            print(f"Erreur lors du split: {e}")
-            # Fallback avec test_size plus petit
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
+        # Split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=config['test_size'], random_state=42
+        )
         
         print(f"  Train: {len(X_train):,} | Test: {len(X_test):,}")
         
-        # Normalisation avec gestion d'erreurs
-        print("\nNormalisation des données...")
-        try:
-            X_train = self.scaler.fit_transform(X_train)
-            X_test = self.scaler.transform(X_test)
-        except Exception as e:
-            print(f"Erreur lors de la normalisation: {e}")
-            # Utiliser une normalisation simple
-            X_mean = np.mean(X_train, axis=0)
-            X_std = np.std(X_train, axis=0)
-            X_std[X_std == 0] = 1  # Éviter la division par zéro
-            X_train = (X_train - X_mean) / X_std
-            X_test = (X_test - X_mean) / X_std
+        # Normalisation
+        print("\nNormalisation des donnees...")
+        X_train = self.scaler.fit_transform(X_train)
+        X_test = self.scaler.transform(X_test)
         
         return X_train, X_test, y_train, y_test
     
@@ -279,40 +200,29 @@ class TensorFlowCarNN:
     
     def build_regression_model(self, input_dim: int):
         """Construit le modèle de régression."""
-        try:
-            model = self.keras.Sequential()
-            
-            # Première couche avec gestion d'erreur
-            model.add(self.keras.layers.Dense(
-                self.config['hidden_layers'][0], 
-                activation='relu', 
-                input_dim=input_dim,
-                kernel_initializer='he_normal'
-            ))
+        model = self.keras.Sequential()
+        
+        # Première couche
+        model.add(self.keras.layers.Dense(
+            self.config['hidden_layers'][0], 
+            activation='relu', 
+            input_dim=input_dim
+        ))
+        model.add(self.keras.layers.Dropout(0.2))
+        
+        # Couches cachées
+        for units in self.config['hidden_layers'][1:]:
+            model.add(self.keras.layers.Dense(units, activation='relu'))
             model.add(self.keras.layers.Dropout(0.2))
-            
-            # Couches cachées
-            for units in self.config['hidden_layers'][1:]:
-                model.add(self.keras.layers.Dense(
-                    units, 
-                    activation='relu',
-                    kernel_initializer='he_normal'
-                ))
-                model.add(self.keras.layers.Dropout(0.2))
-            
-            # Couche de sortie
-            model.add(self.keras.layers.Dense(1, kernel_initializer='he_normal'))
-            
-            # Compilation avec learning rate adaptatif
-            optimizer = self.keras.optimizers.Adam(learning_rate=0.001)
-            model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
-            
-            self.model = model
-            return model
-            
-        except Exception as e:
-            print(f"Erreur lors de la construction du modèle: {e}")
-            raise
+        
+        # Couche de sortie
+        model.add(self.keras.layers.Dense(1))
+        
+        # Compilation
+        model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+        
+        self.model = model
+        return model
     
     def build_classification_model(self, input_dim: int, num_classes: int):
         """Construit le modèle de classification."""
@@ -347,54 +257,33 @@ class TensorFlowCarNN:
     def train(self, X_train, y_train, X_test, y_test):
         """Entraîne le modèle."""
         print("\n" + "=" * 80)
-        print("ENTRAÎNEMENT - TensorFlow/Keras")
+        print("ENTRAINEMENT - TensorFlow/Keras")
         print("=" * 80)
         print(f"Architecture: {self.config['hidden_layers']}")
         
-        try:
-            # Callbacks avec gestion d'erreur
-            callbacks = []
-            
-            # Early stopping
-            early_stopping = self.keras.callbacks.EarlyStopping(
-                monitor='val_loss', 
-                patience=self.config['patience'], 
-                restore_best_weights=True,
-                verbose=1
-            )
-            callbacks.append(early_stopping)
-            
-            # Reduce learning rate
-            reduce_lr = self.keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss',
-                factor=0.5,
-                patience=self.config['patience']//2,
-                min_lr=1e-7,
-                verbose=1
-            )
-            callbacks.append(reduce_lr)
-            
-            # Entraînement
-            start_time = time.time()
-            self.history = self.model.fit(
-                X_train, y_train,
-                validation_data=(X_test, y_test),
-                epochs=self.config['max_epochs'],
-                batch_size=self.config['batch_size'],
-                callbacks=callbacks,
-                verbose=1,
-                shuffle=True
-            )
-            train_time = time.time() - start_time
-            
-            print(f"\nEntraînement terminé en {train_time:.2f}s")
-            print(f"Epochs exécutés: {len(self.history.history['loss'])}")
-            
-            return train_time
-            
-        except Exception as e:
-            print(f"Erreur lors de l'entraînement: {e}")
-            raise
+        # Callbacks
+        early_stopping = self.keras.callbacks.EarlyStopping(
+            monitor='val_loss', 
+            patience=self.config['patience'], 
+            restore_best_weights=True
+        )
+        
+        # Entraînement
+        start_time = time.time()
+        self.history = self.model.fit(
+            X_train, y_train,
+            validation_data=(X_test, y_test),
+            epochs=self.config['max_epochs'],
+            batch_size=self.config['batch_size'],
+            callbacks=[early_stopping],
+            verbose=self.config['verbose']
+        )
+        train_time = time.time() - start_time
+        
+        print(f"\nEntrainement termine en {train_time:.2f}s")
+        print(f"Epochs executes: {len(self.history.history['loss'])}")
+        
+        return train_time
     
     def evaluate_regression(self, X_test, y_test):
         """Évalue le modèle de régression."""
@@ -424,87 +313,69 @@ class TensorFlowCarNN:
     
     def plot_regression_results(self, y_test, predictions, save_path: str = "tensorflow_regression.png"):
         """Visualise les résultats de régression."""
-        try:
-            # Configurer matplotlib pour éviter les erreurs d'affichage
-            plt.style.use('default')
-            
-            errors = np.abs(y_test - predictions)
-            
-            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-            
-            # 1. Prédictions vs Réalité
-            axes[0, 0].scatter(y_test, predictions, alpha=0.3, s=1)
-            axes[0, 0].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
-            axes[0, 0].set_xlabel('Valeurs reelles (s)')
-            axes[0, 0].set_ylabel('Predictions (s)')
-            axes[0, 0].set_title('Predictions vs Realite - TensorFlow')
-            axes[0, 0].grid(True, alpha=0.3)
-            
-            # 2. Distribution des erreurs
-            axes[0, 1].hist(errors, bins=50, edgecolor='black', alpha=0.7)
-            axes[0, 1].axvline(np.median(errors), color='r', linestyle='--', 
-                              label=f'Mediane: {np.median(errors):.3f}s')
-            axes[0, 1].set_xlabel('Erreur absolue (s)')
-            axes[0, 1].set_ylabel('Frequence')
-            axes[0, 1].set_title('Distribution des erreurs')
-            axes[0, 1].legend()
-            axes[0, 1].grid(True, alpha=0.3)
-            
-            # 3. Erreur en fonction de la prédiction
-            axes[1, 0].scatter(predictions, errors, alpha=0.3, s=1)
-            axes[1, 0].axhline(y=0.5, color='g', linestyle='--', alpha=0.5, label='0.5s')
-            axes[1, 0].axhline(y=1.0, color='orange', linestyle='--', alpha=0.5, label='1.0s')
-            axes[1, 0].set_xlabel('Predictions (s)')
-            axes[1, 0].set_ylabel('Erreur absolue (s)')
-            axes[1, 0].set_title('Erreur en fonction de la prediction')
-            axes[1, 0].legend()
-            axes[1, 0].grid(True, alpha=0.3)
-            
-            # 4. Statistiques
-            axes[1, 1].axis('off')
-            stats_text = f"""
-            STATISTIQUES - TensorFlow
-            
-            Dataset: {self.dataset_size:,} voitures
-            
-            Configuration:
-            - Batch size: {self.config['batch_size']}
-            - Architecture: {self.config['hidden_layers']}
-            - Epochs: {len(self.history.history['loss'])}
-            
-            Erreurs:
-            - MAE: {np.mean(errors):.3f}s
-            - Mediane: {np.median(errors):.3f}s
-            - Ecart-type: {np.std(errors):.3f}s
-            - Min: {np.min(errors):.3f}s
-            - Max: {np.max(errors):.3f}s
-            
-            Precision:
-            - < 0.5s: {(errors < 0.5).sum() / len(errors) * 100:.1f}%
-            - < 1.0s: {(errors < 1.0).sum() / len(errors) * 100:.1f}%
-            - < 2.0s: {(errors < 2.0).sum() / len(errors) * 100:.1f}%
-            """
-            axes[1, 1].text(0.1, 0.5, stats_text, fontsize=11, 
-                           family='monospace', verticalalignment='center')
-            
-            plt.tight_layout()
-            
-            # Sauvegarder avec gestion d'erreur
-            try:
-                plt.savefig(save_path, dpi=150, bbox_inches='tight')
-                print(f"\nGraphiques sauvegardés: {save_path}")
-            except Exception as e:
-                print(f"Erreur lors de la sauvegarde: {e}")
-            
-            # Afficher seulement si possible
-            try:
-                plt.show()
-            except:
-                print("Impossible d'afficher les graphiques (mode headless)")
-                plt.close()
-                
-        except Exception as e:
-            print(f"Erreur lors de la création des graphiques: {e}")
+        errors = np.abs(y_test - predictions)
+        
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # 1. Prédictions vs Réalité
+        axes[0, 0].scatter(y_test, predictions, alpha=0.3, s=1)
+        axes[0, 0].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+        axes[0, 0].set_xlabel('Valeurs reelles (s)')
+        axes[0, 0].set_ylabel('Predictions (s)')
+        axes[0, 0].set_title('Predictions vs Realite - TensorFlow')
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # 2. Distribution des erreurs
+        axes[0, 1].hist(errors, bins=50, edgecolor='black', alpha=0.7)
+        axes[0, 1].axvline(np.median(errors), color='r', linestyle='--', 
+                          label=f'Mediane: {np.median(errors):.3f}s')
+        axes[0, 1].set_xlabel('Erreur absolue (s)')
+        axes[0, 1].set_ylabel('Frequence')
+        axes[0, 1].set_title('Distribution des erreurs')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # 3. Erreur en fonction de la prédiction
+        axes[1, 0].scatter(predictions, errors, alpha=0.3, s=1)
+        axes[1, 0].axhline(y=0.5, color='g', linestyle='--', alpha=0.5, label='0.5s')
+        axes[1, 0].axhline(y=1.0, color='orange', linestyle='--', alpha=0.5, label='1.0s')
+        axes[1, 0].set_xlabel('Predictions (s)')
+        axes[1, 0].set_ylabel('Erreur absolue (s)')
+        axes[1, 0].set_title('Erreur en fonction de la prediction')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # 4. Statistiques
+        axes[1, 1].axis('off')
+        stats_text = f"""
+        STATISTIQUES - TensorFlow
+        
+        Dataset: {self.dataset_size:,} voitures
+        
+        Configuration:
+        - Batch size: {self.config['batch_size']}
+        - Architecture: {self.config['hidden_layers']}
+        - Epochs: {len(self.history.history['loss'])}
+        
+        Erreurs:
+        - MAE: {np.mean(errors):.3f}s
+        - Mediane: {np.median(errors):.3f}s
+        - Ecart-type: {np.std(errors):.3f}s
+        - Min: {np.min(errors):.3f}s
+        - Max: {np.max(errors):.3f}s
+        
+        Precision:
+        - < 0.5s: {(errors < 0.5).sum() / len(errors) * 100:.1f}%
+        - < 1.0s: {(errors < 1.0).sum() / len(errors) * 100:.1f}%
+        - < 2.0s: {(errors < 2.0).sum() / len(errors) * 100:.1f}%
+        """
+        axes[1, 1].text(0.1, 0.5, stats_text, fontsize=11, 
+                       family='monospace', verticalalignment='center')
+        
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150)
+        print(f"\nGraphiques sauvegardes: {save_path}")
+        plt.show()
     
     def plot_training_history(self, save_path: str = "tensorflow_history.png"):
         """Visualise l'historique d'entraînement."""
@@ -543,62 +414,65 @@ class TensorFlowCarNN:
 def main():
     """Fonction principale pour tester le modèle TensorFlow."""
     print("=" * 80)
-    print("  MODÈLE TENSORFLOW - Analyse de Performances Automobiles")
+    print("  MODELE TENSORFLOW - Analyse de Performances Automobiles")
     print("=" * 80)
     
     csv_path = Path("cars.csv")
     
     if not csv_path.exists():
-        print(f"\nErreur: Fichier {csv_path} introuvable.")
-        print("Exécutez d'abord program.py pour générer le dataset.")
+        print("\nErreur: Fichier cars.csv introuvable.")
         return
     
-    try:
-        # Initialisation
-        nn = TensorFlowCarNN()
-        
-        # Chargement
-        df = nn.load_and_analyze(csv_path)
-        
-        # Préparation des données
-        X_train, X_test, y_train, y_test = nn.prepare_regression_data(df)
-        
-        # Construction du modèle
-        nn.build_regression_model(input_dim=X_train.shape[1])
-        print(f"\nModèle construit avec {X_train.shape[1]} features d'entrée")
-        
-        # Entraînement
-        train_time = nn.train(X_train, y_train, X_test, y_test)
-        
-        # Évaluation
-        mae, rmse, r2, predictions = nn.evaluate_regression(X_test, y_test)
-        
-        # Résultats
-        print("\n" + "=" * 80)
-        print("  RÉSULTATS FINAUX")
-        print("=" * 80)
-        print(f"\nMétriques de performance:")
-        print(f"  MAE  : {mae:.3f} secondes")
-        print(f"  RMSE : {rmse:.3f} secondes")
-        print(f"  R²   : {r2:.3f} ({r2*100:.1f}%)")
-        
-        print(f"\nPerformances d'exécution:")
-        print(f"  Temps d'entraînement: {train_time:.2f}s")
-        print(f"  Vitesse: {len(X_train) / train_time:.0f} échantillons/s")
-        
-        # Visualisation
-        print(f"\nGénération des graphiques...")
-        nn.plot_regression_results(y_test, predictions)
-        nn.plot_training_history()
-        
-        print("\n" + "=" * 80)
-        print("  ANALYSE TERMINÉE")
-        print("=" * 80)
-        
-    except Exception as e:
-        print(f"\nErreur critique: {e}")
-        import traceback
-        traceback.print_exc()
+    # Initialisation
+    nn = TensorFlowCarNN()
+    
+    # Chargement
+    df = nn.load_and_analyze(csv_path)
+    
+    # Préparation des données
+    X_train, X_test, y_train, y_test = nn.prepare_regression_data(df)
+    
+    # Construction du modèle
+    nn.calculate_optimal_params(len(X_train), X_train.shape[1])
+    nn.build_regression_model(input_dim=X_train.shape[1])
+    print("\nModele construit:")
+    print(nn.model.summary())
+    
+    # Entraînement
+    train_time = nn.train(X_train, y_train, X_test, y_test)
+    
+    # Évaluation
+    mae, rmse, r2, predictions = nn.evaluate_regression(X_test, y_test)
+    
+    # Résultats
+    print("\n" + "=" * 80)
+    print("  RESULTATS FINAUX")
+    print("=" * 80)
+    print(f"\nMetriques de performance:")
+    print(f"  MAE  : {mae:.3f} secondes")
+    print(f"  RMSE : {rmse:.3f} secondes")
+    print(f"  R²   : {r2:.3f} ({r2*100:.1f}%)")
+    
+    print(f"\nPerformances d'execution:")
+    print(f"  Temps d'entrainement: {train_time:.2f}s")
+    print(f"  Vitesse: {len(X_train) / train_time:.0f} echantillons/s")
+    
+    # Exemples
+    print(f"\nExemples de predictions (10 premiers):")
+    for i in range(min(10, len(y_test))):
+        diff = abs(y_test[i] - predictions[i])
+        symbol = "OK" if diff < 0.5 else "~" if diff < 1.0 else "X"
+        print(f"  [{symbol}] Reel: {y_test[i]:5.2f}s | Predit: {predictions[i]:5.2f}s | Ecart: {diff:4.2f}s")
+    
+    # Visualisation
+    print(f"\nGeneration des graphiques...")
+    nn.plot_regression_results(y_test, predictions)
+    nn.plot_training_history()
+    
+    print("\n" + "=" * 80)
+    print("  ANALYSE TERMINEE")
+    print("=" * 80)
+
 
 if __name__ == "__main__":
     main()

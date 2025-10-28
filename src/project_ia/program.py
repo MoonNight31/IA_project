@@ -173,6 +173,7 @@ class CarsLoader:
             reader: DictReader = DictReader(file)
             cars: list[Car] = []
             for row in reader:
+                print(row)
                 car: Car = Car(**row)
                 cars.append(car)
             return cars
@@ -190,14 +191,10 @@ def main():
     # Sauvegarder en une seule fois
     CarsLoader.save_batch(garage, csv_file)
 
-    # Cette ligne était commentée avant - c'est pourquoi vous n'aviez pas l'erreur
     #garage_as_dict = [car.__dict__ for car in garage   ]
     #data_frame = pandas.DataFrame(garage_as_dict)
     #print(data_frame)
-    
-    # Si vous décommentez ces lignes, vous verrez l'erreur :
-    # loaded_cars = CarsLoader.load(csv_file)
-    # print(f"Voitures chargées: {len(loaded_cars)}")
+
 
 if (__name__ == "__main__"):
     main()
