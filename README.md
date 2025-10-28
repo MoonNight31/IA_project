@@ -26,7 +26,7 @@ cd project-ia
 pip install pandas matplotlib scikit-learn tensorflow
 
 # Alternative avec Poetry
-poetry install
+poetry add ...
 ```
 
 ## 💻 Utilisation
@@ -249,5 +249,6 @@ python src/project_ia/program.py
 ## 📝 Licence
 
 MoonNight31
+
 
 
